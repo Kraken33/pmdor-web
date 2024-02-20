@@ -1,0 +1,16 @@
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.counter {
+    width: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.tasks {
+    width: 50%;
+    background: white;
+}
