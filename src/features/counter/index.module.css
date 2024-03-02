@@ -1,6 +1,6 @@
 :root {
-    --trans-start: translate(-50%, -90%) rotate(0deg);
-    --trans-end: translate(-50%, -90%) rotate(360deg);
+    --trans-start: translate(-50%, -50%) rotate(0deg);
+    --trans-end: translate(-50%, -50%) rotate(360deg);
   }
 
   .w100 {
@@ -100,3 +100,22 @@
     opacity: .5;
   }
   
+  .amount {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    & .pomadoro {
+      width: 24px;
+      height: 24px;
+      border-radius: 12px;
+      background: white;
+      margin-right: 10px;
+    }
+    & .break {
+      width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      background: white;
+      margin-right: 10px;
+    }
+  }

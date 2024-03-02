@@ -1,28 +1,36 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Circle } from './Circle';
 import { Actions } from './Actions';
+import {io} from 'socket.io-client';
 import classes from './index.module.css';
-import pauseIcon from './assets/images/pause.png';
-import playIcon from './assets/images/play.png';
 
-enum CounterStatuses {
+const socket = io('http://localhost:3000');
+
+const counterDuration = {
+    POMADORO: 25,
+    SHORT_BREAK: 5,
+    LONG_BREAK: 15,
+}
+
+export enum TimerStatuses {
     paused,
     processing,
     created,
+    finished,
 }
 
-enum CounterTypes {
+enum TimerTypes {
     pomadoro,
     shortBreak,
     longBreak,
 }
 
-type State = {
-    type: CounterTypes;
-    duration: number;
-    statusChangedAt: number;
+type TimerType = {
+    type: TimerTypes;
+    changedAt: number;
+    createdAt: number;
     passed: number;
-    status: CounterStatuses;
+    status: TimerStatuses;
 }
 
 const minutes2Miliseconds = (minutes: number) => {
@@ -38,148 +46,95 @@ function millisToMinutesAndSeconds(millis: number) {
     };
 }
 
-enum ReducerActions {
-    pause,
-    resume,
-    play,
-    cancel,
-    toggle,
-    increase,
-}
-
-type Payload = Record<string, any>;
-
-const reducer = (state: State, { type, payload }: { type: ReducerActions; payload?: Payload }) => {
-    const pause = (state: State) => {
-        if (state.status === CounterStatuses.processing) {
-            return {
-                ...state,
-                status: CounterStatuses.paused,
-                statusChangedAt: Date.now(),
-            }
-        }
-
-        return state;
-    }
-
-    const resume = (state: State) => {
-        if (state.status === CounterStatuses.paused) {
-            return {
-                ...state,
-                status: CounterStatuses.processing,
-                statusChangedAt: Date.now(),
-            }
-        }
-
-        return state;
-    }
-
-    const play = (state: State, payload?: Payload) => {
-        if (state.status === CounterStatuses.created && payload) {
-            return {
-                type: payload.type,
-                duration: minutes2Miliseconds(payload.duration),
-                status: CounterStatuses.processing,
-                passed: 0,
-                statusChangedAt: Date.now(),
-            }
-        }
-
-        return state;
-    }
-
-    const cancel = (state: State, payload?: Payload) => {
-        if (state.status === CounterStatuses.processing || state.status === CounterStatuses.paused && payload?.duration) {
-            return {
-                type: CounterTypes.pomadoro,
-                duration: minutes2Miliseconds((payload as Payload).duration),
-                status: CounterStatuses.created,
-                passed: 0,
-                statusChangedAt: Date.now(),
-            }
-        }
-
-        return state;
-    }
-
-    const toggle = (state: State) => {
-        if (state.status === CounterStatuses.created) {
-            return play(state, {duration: 25});
-        } else if (state.status === CounterStatuses.paused) {
-            return resume(state);
-        } else if (state.status === CounterStatuses.processing) {
-            return pause(state);
-        }
-
-        return state;
-    }
-
-    const increase = (state: State) => {
-        return {
-            ...state,
-            passed: state.passed + 1000
-        }
-    }
-
-    const actions = {
-        [ReducerActions.pause]: pause,
-        [ReducerActions.play]: play,
-        [ReducerActions.resume]: resume,
-        [ReducerActions.cancel]: cancel,
-        [ReducerActions.toggle]: toggle,
-        [ReducerActions.increase]: increase
-    }
-    return actions[type](state, payload);
-}
-
 export const Counter = () => {
-    const [state, dispatch] = useReducer(reducer, {
-        type: CounterTypes.pomadoro,
-        duration: minutes2Miliseconds(25),
-        status: CounterStatuses.created,
-        passed: 0,
-        statusChangedAt: Date.now(),
-    });
+    const [state, setState] = useState<TimerType | null>(null);
+    const [finishedTimers, setFinishedTimers] = useState([] as any);
 
-    let interval = useRef<number | null>(null);
+    let interval = useRef<any | null>(null);
 
-    useEffect(() => {
+    useEffect(()=>{
         const setCircleTransformProperties = ({ yAsix }: { yAsix: number }) => {
             document.getElementById("circle")?.style.setProperty('--trans-start', `translate(-50%, -${yAsix}%) rotate(0deg)`);
             document.getElementById("circle")?.style.setProperty('--trans-end', `translate(-50%, -${yAsix}%) rotate(360deg)`);
         }
-        if (state.status === CounterStatuses.processing) {
-            const step =  1000 / state.duration * 50;
-            let i = 50;
-            interval.current = setInterval(() => {
-                i += step;
-                setCircleTransformProperties({yAsix: i});
-                dispatch({ type: ReducerActions.increase });
-            }, 1000);
-        } else if(state.status === CounterStatuses.paused) {
-            clearInterval(interval.current as any);
-        } else if(state.status === CounterStatuses.created) {
-            clearInterval(interval.current as any);
-            setCircleTransformProperties({yAsix: 50});
+        const setStatus = (state: TimerType)=>{
+            const {passed, changedAt} = state;
+            console.log(state, 's');
+            if (state.status === TimerStatuses.processing) {
+                // debugger;
+                const currentPassed = (Date.now() - changedAt) + passed;
+                const step = 1000 /  minutes2Miliseconds(state.type === TimerTypes.pomadoro ? 25 : 5) * 50;
+                let i = 50 + (step * currentPassed / 1000);
+                interval.current && clearInterval(interval.current);
+                interval.current = setInterval(() => {
+                    i += step;
+                    setCircleTransformProperties({ yAsix: i });
+                    setState((prevState)=>{
+                        if(prevState)
+                            return {
+                                ...prevState,
+                                passed: prevState.passed + 1000
+                            }
+                        return prevState;
+                    });
+                }, 1000);
+
+                return setState({
+                    ...state,
+                    passed: currentPassed
+                });
+            } else if (state.status === TimerStatuses.paused) {
+                clearInterval(interval.current as any);
+            } else if (state.status === TimerStatuses.finished) {
+                clearInterval(interval.current as any);
+                setCircleTransformProperties({ yAsix: 50 });
+                setFinishedTimers([
+                    ...finishedTimers,
+                    {
+                        type: state.type,
+                        finishedAt: state.changedAt,
+                    }
+                ]);
+            } else if(state.status === TimerStatuses.created) {
+                console.log('created');
+                setCircleTransformProperties({yAsix: 50});
+            }
+
+            setState(state);
+
+
         }
-    }, [state.status]);
+
+        socket.on('timer:status_changed', setStatus);
+        socket.on('timer:get_current', (state: TimerType | null)=>{
+            console.log(state, 'state');
+            if(state)
+                setStatus(state);
+        });
+    }, []);
 
     const cancelCounter = useCallback(() => {
-        dispatch({ type: ReducerActions.cancel, payload: { duration: 25 } });
+        // dispatch({ type: ReducerActions.cancel, payload: { duration: counterDuration.POMADORO } });
     }, []);
 
     const toggleCounter = useCallback(() => {
-        dispatch({ type: ReducerActions.toggle });
-    }, []);
+        if(!state || state.status === TimerStatuses.created || state && state.status === TimerStatuses.paused)
+            socket.emit('timer:play');
+        else
+            socket.emit('timer:pause');
+    }, [state?.status]);
 
-    const { minutes, seconds } = millisToMinutesAndSeconds(state.passed);
+    const { minutes, seconds } = state ? millisToMinutesAndSeconds(state.passed) : {minutes: 0, seconds: 0};
 
     return <div>
+        <div className={classes.amount}>
+            {finishedTimers.map(({ type, statusChangedAt }: any) => type === TimerTypes.pomadoro ? <div key={statusChangedAt} className={classes.pomadoro} /> : <div key={statusChangedAt} className={classes.break} />)}
+        </div>
         <Circle minutes={minutes} seconds={seconds} />
         <Actions
             cancel={cancelCounter}
-            toggleState={toggleCounter}
-            stateIcon={state.status === CounterStatuses.processing ? pauseIcon : playIcon}
+            status={state ? state.status : TimerStatuses.created}
+            toggleAction={toggleCounter}
         />
     </div>
 }
