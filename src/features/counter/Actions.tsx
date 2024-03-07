@@ -3,7 +3,8 @@ import classes from './index.module.css';
 import stopIcon from './assets/images/stop.png';
 import pauseIcon from './assets/images/pause.png';
 import playIcon from './assets/images/play.png';
-import { TimerStatuses } from './Counter';
+
+import { TimerStatuses } from '../../types/timer';
 
 type ActionsProps = {
     cancel: ()=>void;
