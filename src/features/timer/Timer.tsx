@@ -1,21 +1,22 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle } from './Circle';
 import { Actions } from './Actions';
 import { io } from 'socket.io-client';
 import slice from 'lodash/fp/slice';
-import classes from './index.module.css';
+import classes from './assets/index.module.css';
 
-import { TimerStatuses, TimerType, TimerTypes } from '../../types/timer';
+import { TimerStatuses, Timer, TimerTypes } from '../../types/timer';
 import { User } from "../../types/user";
+import { TimerType } from "./TimerType";
+import { TodaysTimers } from "./TodaysTimers";
 
 const socket = io('http://localhost:3000');
 
-const counterDuration = {
+export const counterDuration = {
     POMADORO: 25,
     SHORT_BREAK: 5,
     LONG_BREAK: 15,
     TEST: .5,
-}
+};
 
 function millisToMinutesAndSeconds(millis: number) {
     var minutes = Math.floor(millis / 60000);
@@ -26,47 +27,39 @@ function millisToMinutesAndSeconds(millis: number) {
     };
 }
 
-const getDurationByType = (type: TimerTypes) => ({
-    [TimerTypes.pomadoro]: counterDuration.POMADORO,
-    [TimerTypes.shortBreak]: counterDuration.SHORT_BREAK,
-    [TimerTypes.longBreak]: counterDuration.LONG_BREAK,
-    [TimerTypes.test]: counterDuration.TEST
-}[type] * 60_000)
+const recreate = true;
 
-const setCircleTransformProperties = ({ yAsix }: { yAsix: number }) => {
-    document.getElementById("circle")?.style.setProperty('--trans-start', `translate(-50%, -${yAsix}%) rotate(0deg)`);
-    document.getElementById("circle")?.style.setProperty('--trans-end', `translate(-50%, -${yAsix}%) rotate(360deg)`);
-}
-
-export const Counter: FC<{ user: User }> = ({ user }) => {
-    const [state, setState] = useState<TimerType | null>(useMemo(() => {
-        if (user.timers[0].status !== TimerStatuses.finished) {
+export const TimerContainer: FC<{ user: User }> = ({ user }) => {
+    const [state, setState] = useState<Timer | null>(useMemo(() => {
+        if (user.timers.length && user.timers[0].status !== TimerStatuses.finished) {
             return user.timers[0];
         }
         return null;
     }, []));
     const [finishedTimers, setFinishedTimers] = useState(useMemo(() => {
-        if (user.timers[0].status !== TimerStatuses.finished) {
+        if (user.timers.length && user.timers[0].status !== TimerStatuses.finished) {
             return slice(1, user.timers.length)(user.timers);
         }
         return user.timers;
     }, []) as any);
 
+    const [timerType, setTimerType] = useState(useMemo(() => {
+        if (user.timers.length && user.timers[0].status !== TimerStatuses.finished)
+            return user.timers[0].type;
+        return TimerTypes.pomadoro;
+    }, []));
+
+    console.log(timerType, 'tt');
+
     let interval = useRef<any | null>(null);
 
     useEffect(() => {
-        const setStatus = (state: TimerType) => {
-            const MAX_TRANSITION_RISE = 50;
-            const onTimerProcessing = (timer: TimerType) => {
-                const { changedAt, passed, type } = timer;
+        const setStatus = (state: Timer) => {
+            const onTimerProcessing = (timer: Timer) => {
+                const { changedAt, passed } = timer;
                 const currentPassed = (Date.now() - changedAt) + passed;
-                const step = 1000 / getDurationByType(type) * MAX_TRANSITION_RISE;
-                let translateOnPercent = MAX_TRANSITION_RISE + (step * currentPassed / 1000);
-                setCircleTransformProperties({ yAsix: translateOnPercent });
                 interval.current && clearInterval(interval.current);
                 interval.current = setInterval(() => {
-                    translateOnPercent += step;
-                    setCircleTransformProperties({ yAsix: translateOnPercent });
                     setState((prevState) => {
                         if (prevState)
                             return {
@@ -83,23 +76,23 @@ export const Counter: FC<{ user: User }> = ({ user }) => {
                 };
             }
 
-            const onTimerFinish = (timer: TimerType) => {
+            const onTimerFinish = (timer: Timer) => {
                 clearInterval(interval.current);
-                setCircleTransformProperties({ yAsix: 50 });
-                setFinishedTimers((finishedTimers: TimerType[]) => ([
+                debugger;
+                setFinishedTimers((finishedTimers: Timer[]) => ([
                     ...finishedTimers,
                     timer,
                 ]));
 
-                return timer;
+                return null;
             }
 
-            const onTimerPause = (timer: TimerType) => {
+            const onTimerPause = (timer: Timer) => {
                 clearInterval(interval.current);
                 return timer;
             }
-            const onTimerCreate = (timer: TimerType) => {
-                setCircleTransformProperties({ yAsix: 50 });
+            const onTimerCreate = (timer: Timer) => {
+                setTimerType(timer.type);
                 return timer;
             }
             const getHandlerByTimerStatus = (status: TimerStatuses) => ({
@@ -126,22 +119,17 @@ export const Counter: FC<{ user: User }> = ({ user }) => {
 
     const toggleCounter = useCallback(() => {
         if (!state || state.status === TimerStatuses.created || state && state.status === TimerStatuses.paused)
-            socket.emit('timer:play');
+            socket.emit('timer:play', { type: timerType, recreate });
         else
             socket.emit('timer:pause');
-    }, [state?.status]);
+    }, [state?.status, timerType]);
 
     const { minutes, seconds } = state ? millisToMinutesAndSeconds(state.passed) : { minutes: 0, seconds: 0 };
 
-    return <div>
-        <div className={classes.amount}>
-            {useMemo(
-                () => finishedTimers.map(
-                    ({ type, changedAt }: any) => type === TimerTypes.pomadoro
-                        ? <div key={changedAt} className={classes.pomadoro} />
-                        : <div key={changedAt} className={classes.break} />), [finishedTimers])}
-        </div>
-        <Circle minutes={minutes} seconds={seconds} />
+    return <div className={classes.timer}>
+        <TodaysTimers timers={finishedTimers} />
+        <TimerType value={timerType} disabled={TimerStatuses.processing === state?.status} onChange={setTimerType} />
+        <div style={{ fontSize: "4vw" }}>{minutes}:{seconds}</div>
         <Actions
             cancel={cancelCounter}
             status={state ? state.status : TimerStatuses.created}

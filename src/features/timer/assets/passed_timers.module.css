@@ -1,0 +1,12 @@
+.passed_timers {
+    display: flex;
+    font-size: 1vw;
+}
+
+.passed_timers__item {
+    margin-right: 20px;
+
+    &:last-child {
+        margin-right: 0;
+    }
+}

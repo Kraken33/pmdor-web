@@ -12,7 +12,7 @@ export enum TimerTypes {
     test,
 }
 
-export type TimerType = {
+export type Timer = {
     type: TimerTypes;
     changedAt: number;
     createdAt: number;

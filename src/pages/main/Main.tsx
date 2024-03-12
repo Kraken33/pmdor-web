@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Counter } from "../../features/counter";
+import { TimerContainer } from "../../features/timer";
 import classes from './index.module.css';
 
 import type { User } from "../../types/user";
@@ -14,7 +14,7 @@ export const MainPage = () => {
 
     return <div className={classes.container}>
         <div className={classes.counter}>
-            {user && <Counter user={user} />}
+            {user && <TimerContainer user={user} />}
         </div>
         <div className={classes.tasks}></div>
     </div>

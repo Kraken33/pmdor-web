@@ -1,6 +1,6 @@
-import type { TimerType } from "./timer";
+import type { Timer } from "./timer";
 
 export type User = {
     _id: string;
-    timers: Array<TimerType>;
+    timers: Array<Timer>;
 }

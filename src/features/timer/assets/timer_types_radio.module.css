@@ -1,0 +1,26 @@
+.switch {
+    font-size: 2vw;
+}
+
+.switch__label {
+    cursor: pointer;
+    /* border-bottom: 2px solid white; */
+    margin-right: 20px;
+    &:last-child {
+        margin-right: 0;
+    }
+}
+
+.switch .switch__input:checked + .switch__label {
+    border-bottom: 2px solid var(--primary_color);
+}
+
+.switch input[type=radio]:disabled + .switch__label {
+    cursor:not-allowed;
+    opacity: .7;
+}
+
+.switch input[type=radio]:not(:checked),
+.switch input[type=radio]:checked {
+    display: none;
+}
